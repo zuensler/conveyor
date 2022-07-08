@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
   <POU Name="conveyor" Id="{247b8935-7e89-4eb6-9a53-2903b8a12848}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK conveyor;
 
@@ -13,9 +13,8 @@ END_VAR
 
 //-------------------------------------------------- Input variables (public) (read-only)
 VAR_INPUT
-	bMoveFwd:			BOOL := FALSE;
-	bMoveBwd:			BOOL := FALSE;
-	rVelocity: 		REAL;
+	conveyor_direction : MC_Direction;
+	rVelocity: 			REAL;
 	
 	// Basic inputs ( !! MANDATORY !! )
 	bNotAus: 		BOOL;
@@ -45,14 +44,11 @@ END_VAR
 
 //-------------------------------------------------- Internal variables (private)
 VAR
-	MC_Clamp_Power: MC_Power;						(* Clamp: FB Power *)
-	MC_Clamp_Reset: MC_Reset;						(* Clamp: FB Reset *)
-	MC_Clamp_JogHome: MC_Jog;						(* Clamp: FB Jog *)
-	MC_Clamp_SetPosition: MC_SetPosition;			(* Clamp: FB Set position *)
-	MC_Clamp_MoveAbsolute_Open: MC_MoveAbsolute;	(* Clamp: FB Move to open *)
-	MC_Clamp_MoveAbsolute_Close: MC_MoveAbsolute;	(* Clamp: FB Move to close *)
+	MC_Conveyor_Power: MC_Power;						(* Clamp: FB Power *)
+	MC_Conveyor_Reset: MC_Reset;						(* Clamp: FB Reset *)
+	MC_Conveyor_MoveVelocity: MC_MoveVelocity;
 	
-	iTrqCounter : INT := 1;
+
 	bTrqToHigh : BOOL;
 	
 	resetError: BOOL;
@@ -60,30 +56,15 @@ VAR
 	
 	powerError: BOOL;
 	isPowered: BOOL;
+	bExecute : BOOL;
+	rVelOld : REAL;
+	
 
-	bJogHome: BOOL;
-	jogHomeError: BOOL;
-	hasJoggedHome: BOOL;
-
-	openError: BOOL;
-	closeError: BOOL;
-
-	bSetPosition: BOOL;
-	positionError: BOOL;
-	hasSetPosition: BOOL;
+	
+	
 	
 	// Error signal (internal) ( !! MANDATORY !! )
 	bInternalError: BOOL := FALSE;
-	
-	
-	pFilterIns : POINTER TO REAL;
-	filterTime : TIME := T#20MS;
-	samples : INT :=100;
-	
-	
-	filterValue : REAL;	
-//moving average filter
-	
 	
 END_VAR
 
@@ -102,10 +83,13 @@ END_VAR
       <ST><![CDATA[//-------------------------------------------------- Global block-action triggers
 axis.ReadStatus();
 
-MC_Clamp_Power(	Axis:=axis,	Enable:=(bNotAus) AND (bEnable), Enable_Positive:=TRUE, Enable_Negative:=TRUE, Override:=100.0, Status=>isPowered, Error=>powerError );
-MC_Clamp_Reset(	Axis:=axis,	Execute:=bReset, Done=>isResetted, Error=>resetError );
+MC_Conveyor_Power(	Axis:=axis,	Enable:=(bNotAus) AND (bEnable), Enable_Positive:=TRUE, Enable_Negative:=TRUE, Override:=100.0, Status=>isPowered, Error=>powerError );
+MC_Conveyor_Reset(	Axis:=axis,	Execute:=bReset, Done=>isResetted, Error=>resetError );
 
-MC_Clamp_JogHome( Axis:=axis, JogForward:=bMoveFwd, JogBackwards:=bMoveBwd, Mode:=MC_JOGMODE_CONTINOUS, Error=>jogHomeError, Velocity :=rVelocity );
+//MC_Conveyor_JogHome( Axis:=axis, JogForward:=bMoveFwd, JogBackwards:=bMoveBwd, Mode:=MC_JOGMODE_CONTINOUS, Error=>jogHomeError, Velocity :=rVelocity );
+MC_Conveyor_MoveVelocity(Axis:=axis, Execute:=bExecute, Velocity:=rVelocity, Direction:= MC_Direction.MC_Positive_Direction);
+
+
 
 
 
@@ -121,6 +105,7 @@ CASE State OF
 					LastState := UNKNOWN;
 					LastStateStep:= 0;
 					StateStep := 99;
+					rVelocity :=0;
 					
 				99:	Busy := SetBusy( FALSE, Update=>Done );
 					State := SetState( INIT, Reset=>StateStep );
@@ -132,11 +117,14 @@ CASE State OF
 			CASE StateStep OF
 				0:	Busy := SetBusy( TRUE, Update=>Done );
 					Home := FALSE;
+					bExecute := TRUE;
 					StateStep := 1;
 
 				1:	Busy := SetBusy( FALSE, Update=>Done );
+					
 					IF isPowered THEN
 						StateStep := 99;
+						
 					END_IF
 
 				99: Busy := SetBusy( FALSE, Update=>Done );
@@ -148,6 +136,14 @@ CASE State OF
 	//------------------------- RUNNING (blocking) (sort of)
 	RUNNING:
 			Ready := TRUE;
+			
+			IF NOT (rVelocity = rVelOld) THEN
+				rVelOld := rVelocity;
+				bExecute := FALSE;
+			ELSE
+				bExecute := TRUE;;
+			END_IF
+
 			IF NOT isPowered THEN
 				bInternalError := TRUE;		
 			END_IF
@@ -194,9 +190,24 @@ END_IF
       <LineId Id="111" Count="4" />
       <LineId Id="357" Count="0" />
       <LineId Id="120" Count="1" />
+      <LineId Id="458" Count="0" />
+      <LineId Id="465" Count="0" />
+      <LineId Id="460" Count="0" />
       <LineId Id="134" Count="0" />
-      <LineId Id="139" Count="35" />
-      <LineId Id="212" Count="43" />
+      <LineId Id="139" Count="12" />
+      <LineId Id="480" Count="0" />
+      <LineId Id="152" Count="10" />
+      <LineId Id="482" Count="0" />
+      <LineId Id="163" Count="2" />
+      <LineId Id="481" Count="0" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="483" Count="0" />
+      <LineId Id="168" Count="6" />
+      <LineId Id="212" Count="3" />
+      <LineId Id="472" Count="0" />
+      <LineId Id="474" Count="5" />
+      <LineId Id="473" Count="0" />
+      <LineId Id="216" Count="39" />
       <LineId Id="9" Count="0" />
     </LineIds>
   </POU>
